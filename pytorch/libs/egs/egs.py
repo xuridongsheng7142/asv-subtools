@@ -104,6 +104,27 @@ class ChunkEgs(Dataset):
     def __len__(self):
         return len(self.ark_path)
 
+def pad_list(xs):
+    n_batch = len(xs)
+    max_len = max(x.shape[1] for x in xs)
+
+    pad = np.zeros([n_batch, xs[0].shape[0] * max_len]).reshape(n_batch, xs[0].shape[0], max_len)
+
+    for i in range(n_batch):
+        pad[i][:, 0:xs[i].shape[1]] = xs[i]
+
+    return pad
+
+def custom_collate_fn(batch):
+    feats, labels = [], []
+    for feat, label in batch:
+        feats.append(feat)
+        labels.append(label)
+
+    feats = pad_list(feats)
+    feats = torch.tensor(feats, dtype=torch.float32)
+    labels = torch.tensor(labels)
+    return feats, labels
 
 class BaseBunch():
     """BaseBunch:(trainset,[valid]).
@@ -136,11 +157,11 @@ class BaseBunch():
             shuffle = False
 
         if use_fast_loader:
-            self.train_loader = DataLoaderFast(max_prefetch, trainset, batch_size = batch_size, shuffle=shuffle, 
+            self.train_loader = DataLoaderFast(max_prefetch, trainset, batch_size = batch_size, shuffle=shuffle, collate_fn=custom_collate_fn, 
                                                num_workers=num_workers, pin_memory=pin_memory, drop_last=drop_last,
                                                sampler=train_sampler)
         else:
-            self.train_loader = DataLoader(trainset, batch_size = batch_size, shuffle=shuffle, num_workers=num_workers, 
+            self.train_loader = DataLoader(trainset, batch_size = batch_size, shuffle=shuffle, collate_fn=custom_collate_fn, num_workers=num_workers, 
                                            pin_memory=pin_memory, drop_last=drop_last, sampler=train_sampler)
 
         self.num_batch_train = len(self.train_loader)
@@ -159,7 +180,7 @@ class BaseBunch():
 
             # Do not use DataLoaderFast for valid for it increases the memory all the time when compute_valid_accuracy is True.
             # But I have not find the real reason.
-            self.valid_loader = DataLoader(valid, batch_size = valid_batch_size, shuffle=False, num_workers=num_workers, 
+            self.valid_loader = DataLoader(valid, batch_size = valid_batch_size, shuffle=False, collate_fn=custom_collate_fn, num_workers=num_workers, 
                                            pin_memory=pin_memory, drop_last=False)
 
             self.num_batch_valid = len(self.valid_loader)

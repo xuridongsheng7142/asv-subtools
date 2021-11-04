@@ -115,6 +115,22 @@ class SoftmaxLoss(TopVirtualLoss):
         outputs = torch.squeeze(posterior, dim=2)
         return self.loss_function(outputs/self.t, targets)
 
+    def get_output(self, inputs):
+        """Final outputs should be a (N, C) matrix and targets is a (1,N) matrix where there are
+        N targets-indexes (index value belongs to 0~9 when target-class C = 10) for N examples rather than
+        using one-hot format directly.
+        One example, one target.
+        @inputs: a 3-dimensional tensor (a batch), including [samples-index, frames-dim-index, frames-index]
+        """
+        assert len(inputs.shape) == 3
+        assert inputs.shape[2] == 1
+
+        posterior = self.affine(inputs)
+        self.posterior = posterior.detach()
+
+        outputs = torch.squeeze(posterior, dim=2)
+        return outputs
+
 
 class SoftmaxLoss_frame_phone_fix(TopVirtualLoss):
     #Zheng Li 2021-06-08
