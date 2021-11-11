@@ -383,6 +383,33 @@ class MarginSoftmaxLoss(TopVirtualLoss):
                'margin={m}, s={s}, t={t}, feature_normalize={feature_normalize}, mhe_loss={mhe_loss}, mhe_w={mhe_w}, ' \
                'eps={eps})'.format(**self.__dict__)
 
+    def get_output(self, inputs):
+        """Final outputs should be a (N, C) matrix and targets is a (1,N) matrix where there are
+        N targets-indexes (index value belongs to 0~9 when target-class C = 10) for N examples rather than
+        using one-hot format directly.
+        One example, one target.
+        @inputs: a 3-dimensional tensor (a batch), including [samples-index, frames-dim-index, frames-index]
+        """
+
+        assert len(inputs.shape) == 3
+        assert inputs.shape[2] == 1
+
+        ## Normalize
+        normalized_x = F.normalize(inputs.squeeze(dim=2), dim=1) # [512, 512] [batch_size, output_dim]
+        normalized_weight = F.normalize(self.weight.squeeze(dim=2), dim=1) # [1000, 512] [target_num, output_dim]
+        cosine_theta = F.linear(normalized_x, normalized_weight) # Y = W*X
+
+        if not self.feature_normalize :
+            self.s = inputs.norm(2, dim=1) # [batch-size, l2-norm]
+            # The accuracy must be reported before margin penalty added
+            self.posterior = (self.s.detach() * cosine_theta.detach()).unsqueeze(2)
+        else:
+            self.posterior = (self.s * cosine_theta.detach()).unsqueeze(2)
+
+        # For valid set.
+        outputs = self.s * cosine_theta
+        return outputs
+
 
 class CurricularMarginComponent(torch.nn.Module):
     """CurricularFace is implemented as a called component for MarginSoftmaxLoss.
